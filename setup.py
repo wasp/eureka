@@ -1,10 +1,11 @@
 from setuptools import setup
 
+# Version managed by bumpversion, do not change it directly.
 __version__ = '0.0.3'
 
 
 setup(name='wasp-eureka',
-      description=('Async Eureka client'),
+      description='Async Eureka client',
       version=__version__,
       author='Matt Rasband',
       author_email='matt.rasband@gmail.com',
