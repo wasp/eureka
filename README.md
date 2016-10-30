@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/wickedasp/eureka.svg?branch=master)](https://travis-ci.org/wickedasp/eureka)
+[![Build Status](https://travis-ci.org/wickedasp/eureka.svg?branch=master)](https://travis-ci.org/wickedasp/eureka) [![PyPI version](https://badge.fury.io/py/wasp-eureka.svg)](https://badge.fury.io/py/wasp-eureka)
 
 # WASP Eureka
 
