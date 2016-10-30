@@ -1,14 +1,28 @@
-[![Build Status](https://travis-ci.org/wickedasp/eureka.svg?branch=master)](https://travis-ci.org/wickedasp/eureka) [![PyPI version](https://badge.fury.io/py/wasp-eureka.svg)](https://badge.fury.io/py/wasp-eureka)
+.. image:: https://travis-ci.org/wickedasp/eureka.svg?branch=master
+    :target: https://travis-ci.org/wickedasp/eureka
 
-# WASP Eureka
+.. image:: https://badge.fury.io/py/wasp-eureka.svg
+    :target: https://badge.fury.io/py/wasp-eureka
+
+WASP Eureka
+===========
 
 Asynchronous Naive Eureka client for the Netflix OSS/Spring Cloud bundled eureka stack.
 
-## Installation
+Installation
+------------
 
-    pip install wasp-eureka
+.. code-block:: bash
 
-## Usage
+    $ pip install wasp-eureka
+
+
+Usage
+-----
+
+The surface area of this module is pretty small, effectively you just need to care about the wasp_gateway.EurekaClient class and its methods:
+
+.. code-block:: python
 
     import asyncio
     
@@ -41,4 +55,6 @@ Asynchronous Naive Eureka client for the Netflix OSS/Spring Cloud bundled eureka
     
     loop.run_until_complete(main(loop=loop))
 
-Depending on your framework, you probably want to use a scheduler (see [APScheduler](https://apscheduler.readthedocs.io/en/latest/) for support for a wide number of python frameworks)
+Depending on your framework, you probably want to use a scheduler (see APScheduler_ for support for a wide number of python frameworks)
+
+.. _APScheduler: https://apscheduler.readthedocs.io/en/latest/
