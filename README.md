@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/wickedasp/eureka.svg?branch=master)](https://travis-ci.org/wickedasp/eureka)
+
 # WASP Eureka
 
 Asynchronous Naive Eureka client for the Netflix OSS/Spring Cloud bundled eureka stack.
