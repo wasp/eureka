@@ -7,6 +7,7 @@ built by Netflix and used in the Spring Cloud stack.
 import asyncio
 import atexit
 import enum
+import logging
 import uuid
 from typing import Optional, Dict, Any
 
@@ -16,6 +17,8 @@ try:
     import ujson as json
 except ImportError:
     import json
+
+_LOG = logging.getLogger('wasp.eureka')
 
 _SESSION = ClientSession(headers={
     # They default to using XML.
@@ -89,15 +92,15 @@ class EurekaClient:
         # given we just give it a sane default. It being
         # a 404 doesn't seem to matter.
         if status_page_url is None:
-            status_page_url = ip_addr + '/info'
+            status_page_url = 'http://{}:{}/info'.format(ip_addr, port)
+            _LOG.debug('Status page not provided, rewriting to %s',
+                       status_page_url)
         self._status_page_url = status_page_url
 
         # unique id for the application, only really required
         # if this instance wants to register with Eureka instead
         # of just being a consumer.
-        self._instance_id = instance_id or '{}:{}:{}'.format(
-            str(uuid.uuid4()), app_name, port
-        )
+        self._instance_id = instance_id or self._generate_instance_id()
 
     async def register(self, *, metadata: Optional[Dict[str, Any]] = None,
                        eviction_duration: int = 90):
@@ -243,3 +246,11 @@ class EurekaClient:
         async with _SESSION.get(url) as resp:
             assert resp.status == 200, resp
             return await resp.json()
+
+    def _generate_instance_id(self):
+        """Generates a unique instance id"""
+        instance_id = '{}:{}:{}'.format(
+            str(uuid.uuid4()), self._app_name, self._port
+        )
+        _LOG.info('Generated new instance id: %s', instance_id)
+        return instance_id
