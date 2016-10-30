@@ -1,4 +1,5 @@
 # Python
+.cache/
 .eggs/
 *.egg-info
 __pycache__/

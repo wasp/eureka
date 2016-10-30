@@ -1,9 +1,17 @@
 language: python
 python:
-  - "3.5"
-  - "3.6-dev"
+- '3.5'
+- 3.6-dev
 install:
-  - python setup.py install
+- python setup.py install
 script:
-  - python setup.py flake8
-  - python setup.py test
+- python setup.py flake8
+#- python setup.py test
+deploy:
+  provider: pypi
+  user: mrasband
+  distributions: sdist bdist_wheel
+  on:
+    tags: true
+  password:
+    secure: Vv5aEv4O6LIuxdKBorP1ckN8WdC9Xc3CHRfrc61MkEbnln4kHFxrTjMjgK/rUR/moFoXBQHC8OMU3AWqyWblypjjG5GqsAUL7UsS+jIC8Eoulf3vamrmjTjZG33YqFkc5MLVdGhBcKV0rZrnCN0nb2aG8mN71AuV2ZVrj1NXhJjYU5fR6oSWi4AfJvbBtK52xxrgtidJP0gpSD0KNYe28VmAvrumkLPWYpFIVYwPBP9iFDM5YX0S4IZNDPRvZJ9heDLywAJ34ChtpRnsQ1ak6ECIC6vQCUUHe+4xgwaNdgvpBwoj9h7ZcZIE5oqrjsQapy9zGpzVkQ4F0erbfU3vLtqWVcQY4EIcp5iRSZs+DmWT/2S2pAa0Q0L1O1mH9ZH604zEfec2J7fNrO6vEigxpfvdY6xYzEvryD17eojyGDTEc/5DQT4h0yQ1FTt15Jlpi2ECugCeoxMY3KaL9/UCga6cMRvoRZJtOUO2mdg6vNvjNY3JpZ5OpohCmdhATeL4yRg5eE4rhVolqBdHF/sAEQokEKle9ym0UrfyBN1zwmRexL4Oho6gB299zOpL4mUJfakB3NfKkDn5WGqLuP2C1R2h3J3Y0zEkshMKxVMaX6uhHKYXWIKU8D3HuNKVqbEqFdOTLrOv98I6OzGKrp97b32cmSltBcAZ63YBP/rSxNY=
