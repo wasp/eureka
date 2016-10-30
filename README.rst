@@ -58,3 +58,18 @@ The surface area of this module is pretty small, effectively you just need to ca
 Depending on your framework, you probably want to use a scheduler (see APScheduler_ for support for a wide number of python frameworks)
 
 .. _APScheduler: https://apscheduler.readthedocs.io/en/latest/
+
+Creating a Release
+------------------
+
+Bumpversion_ provides a simplified way to manage versioning, to check the dry run before running it:
+
+.. code-block:: bash
+
+    $ bumpversion [patch,minor,major] --dry-run --verbose
+
+.. code-block:: bash
+
+    $ bumpversion patch
+
+.. _Bumpversion: https://pypi.python.org/pypi/bumpversion
