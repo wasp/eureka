@@ -24,7 +24,7 @@ setup(name='wasp-eureka',
           'Programming Language :: Python :: 3.5',
           'License :: OSI Approved :: Apache Software License',
           'Intended Audience :: Developers',
-          'Development Status :: 2 - Pre-Alpha',
+          'Development Status :: 4 - Beta',
           'Topic :: Software Development',
       ],
       setup_requires=[
