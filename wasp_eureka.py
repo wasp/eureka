@@ -49,7 +49,7 @@ class EurekaClient:
     def __init__(self, app_name: str, port: int, ip_addr: str, *,
                  hostname: Optional[str] = None,
                  eureka_url: str = 'http://localhost:8765/eureka/',
-                 loop: Optional[asyncio.BaseEventLoop] = None,
+                 loop: Optional[asyncio.AbstractEventLoop] = None,
                  instance_id: Optional[str] = None,
                  health_check_url: Optional[str] = None,
                  status_page_url: Optional[str] = None):

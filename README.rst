@@ -12,6 +12,8 @@ Asynchronous Naive Eureka client for the Netflix OSS/Spring Cloud bundled eureka
 Installation
 ------------
 
+Note: this supports Python 3.5+
+
 .. code-block:: bash
 
     $ pip install wasp-eureka
