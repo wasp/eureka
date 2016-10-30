@@ -68,12 +68,12 @@ class EurekaClient:
         :param instance_id: Server instance ID, you should only really
                             set this if you need to operate on an existing
                             registered service.
-        :param health_check_url: Health check URL if available, not required. But
-                                 if included it should return 2xx.
-        :param status_page_url: URL for server status (info route?), It's required
-                                to not crash the Spring Eureka UI, but otherwise
-                                not required. If not included - we will just use
-                                the server IP with '/info'.
+        :param health_check_url: Health check URL if available, not required.
+                                 But if included it should return 2xx.
+        :param status_page_url: URL for server status (info route?), It's
+                                required to not crash the Spring Eureka UI,
+                                but otherwise not required. If not included -
+                                we will just use the server IP with '/info'.
         """
         self._loop = loop or asyncio.get_event_loop()
         if eureka_url.endswith('/'):
