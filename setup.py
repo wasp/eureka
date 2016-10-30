@@ -12,7 +12,7 @@ setup(name='wasp-eureka',
       license='Apache-2.0',
       url='https://github.com/wickedasp/eureka',
       download_url=('https://github.com/wickedasp/eureka'
-                    '/archive/v' + __version__ + '.tar.bz2'),
+                    '/archive/v' + __version__ + '.tar.gz'),
       keywords=[
           'microservice',
           'netflixoss',
