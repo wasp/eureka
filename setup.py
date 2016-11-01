@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 # Version managed by bumpversion, do not change it directly.
 __version__ = '0.0.4'
@@ -19,7 +19,7 @@ setup(name='wasp-eureka',
           'asyncio',
           'springcloud',
       ],
-      py_modules=['wasp_eureka'],
+      packages=find_packages(exclude=('examples',)),
       classifiers=[
           'Programming Language :: Python :: 3.5',
           'License :: OSI Approved :: Apache Software License',

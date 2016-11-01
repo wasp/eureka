@@ -7,18 +7,20 @@ built by Netflix and used in the Spring Cloud stack.
 import asyncio
 import atexit
 import enum
-import logging
 import uuid
+from http import HTTPStatus
 from typing import Optional, Dict, Any
 
-from aiohttp import ClientSession
+from wasp_eureka.exc import EurekaException
 
 try:
     import ujson as json
 except ImportError:
     import json
 
-_LOG = logging.getLogger('wasp.eureka')
+from aiohttp import ClientSession
+
+from .log import logger, InstanceIdLogAdapter
 
 _SESSION = ClientSession(headers={
     # They default to using XML.
@@ -43,11 +45,7 @@ class StatusType(enum.Enum):
 class EurekaClient:
     __slots__ = ('_loop', '_eureka_url', '_app_name', '_port', '_hostname',
                  '_ip_addr', '_instance_id', '_health_check_url',
-                 '_status_page_url',)
-
-    """
-    A really naive eureka client.
-    """
+                 '_status_page_url', '_log')
 
     def __init__(self, app_name: str, port: int, ip_addr: str, *,
                  hostname: Optional[str] = None,
@@ -87,23 +85,27 @@ class EurekaClient:
         self._hostname = hostname or ip_addr
         self._ip_addr = ip_addr
         self._health_check_url = health_check_url
-        # Not including this seems to crash the Eureka UI,
-        # it's just a link from eureka over so if none is
-        # given we just give it a sane default. It being
-        # a 404 doesn't seem to matter.
-        if status_page_url is None:
-            status_page_url = 'http://{}:{}/info'.format(ip_addr, port)
-            _LOG.debug('Status page not provided, rewriting to %s',
-                       status_page_url)
-        self._status_page_url = status_page_url
 
         # unique id for the application, only really required
         # if this instance wants to register with Eureka instead
         # of just being a consumer.
         self._instance_id = instance_id or self._generate_instance_id()
 
+        self._log = InstanceIdLogAdapter(logger, {
+            'instance_id': self._instance_id
+        })
+
+        # Not including this crashes the Eureka UI, fixed in later version,
+        # not one we can ensure people are using.
+        if status_page_url is None:
+            status_page_url = 'http://{}:{}/info'.format(ip_addr, port)
+            self._log.debug('Status page not provided, rewriting to %s',
+                            status_page_url)
+        self._status_page_url = status_page_url
+
     async def register(self, *, metadata: Optional[Dict[str, Any]] = None,
-                       eviction_duration: int = 90):
+                       lease_duration: int = 30,
+                       lease_renewal_interval: int = 10):
         """Register the current application with eureka with the
         specified status. Note, there is a limited lease with eureka,
         so you will want to renew it on a schedule. Also to avoid
@@ -112,14 +114,16 @@ class EurekaClient:
         :param metadata: Arbitrary dictionary of metadata to set on
                          the instance. This can be treated effectively
                          as a key/value store. This needs to be json-able
-        :param eviction_duration: Optional lease length customization (secs)
-                                  ensure that renews are within the duration.
+        :param lease_duration: Length of the lease, defaults to 30s
+        :param lease_renewal_interval: How often to expect renewals
         """
         payload = {
             'instance': {
                 'instanceId': self._instance_id,
                 'leaseInfo': {
-                    'evictionDurationSecs': eviction_duration,
+                    # 'evictionDurationSecs': eviction_duration,  # v2?
+                    'durationInSecs': lease_duration,
+                    'renewalIntervalInSecs': lease_renewal_interval,
                 },
                 'port': {
                     '$': self._port,
@@ -148,103 +152,99 @@ class EurekaClient:
             payload['instance']['statusPageUrl'] = self._status_page_url
         if metadata:
             payload['instance']['metadata'] = metadata
-        url = '{}/apps/{}'.format(self._eureka_url, self._app_name)
-        async with _SESSION.post(url, data=json.dumps(payload)) as resp:
-            return resp.status == 204
+        url = '/apps/{}'.format(self._app_name)
+        self._log.debug('Registering %s', self._app_name)
+        return await self._do_req(url, method='POST', data=json.dumps(payload))
 
     async def renew(self) -> bool:
         """Renews the application's lease with eureka to avoid
         eradicating stale/decommissioned applications."""
-        url = '{}/apps/{}/{}'.format(self._eureka_url, self._app_name,
-                                     self._instance_id)
-        async with _SESSION.put(url) as resp:
-            return resp.status == 200
+        url = '/apps/{}/{}'.format(self._app_name, self._instance_id)
+        return await self._do_req(url, method='PUT')
 
     async def deregister(self) -> bool:
         """Deregister with the remote server, if you forget to do
         this the gateway will be giving out 500s when it tries to
         route to your application."""
-        url = '{}/apps/{}/{}'.format(self._eureka_url, self._app_name,
-                                     self._instance_id)
-        async with _SESSION.delete(url) as resp:
-            return resp.status == 200
+        url = '/apps/{}/{}'.format(self._app_name, self._instance_id)
+        return await self._do_req(url, method='DELETE')
 
     async def set_status_override(self, status: StatusType) -> bool:
         """Sets the status override, note: this should generally only
         be used to pull services out of commission - not really used
         to manually be setting the status to UP falsely."""
-        url = '{}/apps/{}/{}/status?value={}'.format(self._eureka_url,
-                                                     self._app_name,
-                                                     self._instance_id,
-                                                     status.value)
-        async with _SESSION.put(url) as resp:
-            return resp.status == 200
+        url = '/apps/{}/{}/status?value={}'.format(self._app_name,
+                                                   self._instance_id,
+                                                   status.value)
+        return await self._do_req(url, method='PUT')
 
     async def remove_status_override(self) -> bool:
         """Removes the status override."""
-        url = '{}/apps/{}/{}/status'.format(self._eureka_url,
-                                            self._app_name,
-                                            self._instance_id)
-        async with _SESSION.delete(url) as resp:
-            return resp.status == 200
+        url = '/apps/{}/{}/status'.format(self._app_name,
+                                          self._instance_id)
+        return await self._do_req(url, method='DELETE')
 
     async def update_meta(self, key: str, value: Any) -> bool:
-        url = '{}/apps/{}/{}/metadata?{}={}'.format(self._eureka_url,
-                                                    self._app_name,
-                                                    self._instance_id,
-                                                    key, value)
-        async with _SESSION.put(url) as resp:
-            return resp.status == 200
+        url = '/apps/{}/{}/metadata?{}={}'.format(self._app_name,
+                                                  self._instance_id,
+                                                  key, value)
+        return await self._do_req(url, method='PUT')
 
     async def get_apps(self) -> Dict[str, Any]:
         """Gets a payload of the apps known to the
         eureka server."""
-        url = self._eureka_url + '/apps'
-        async with _SESSION.get(url) as resp:
-            assert resp.status == 200, resp
-            return await resp.json()
+        url = '/apps'
+        return await self._do_req(url)
 
     async def get_app(self, app_name: Optional[str] = None) -> Dict[str, Any]:
         app_name = app_name or self._app_name
-        url = self._eureka_url + '/apps/' + app_name
-        async with _SESSION.get(url) as resp:
-            assert resp.status == 200, resp
-            return await resp.json()
+        url = '/apps/{}'.format(app_name)
+        return await self._do_req(url)
 
     async def get_app_instance(self, app_name: Optional[str] = None,
                                instance_id: Optional[str] = None):
         """Get a specific instance, narrowed by app name."""
         app_name = app_name or self._app_name
         instance_id = instance_id or self._instance_id
-        url = '{}/apps/{}/{}'.format(self._eureka_url,
-                                     app_name, instance_id)
-        async with _SESSION.get(url) as resp:
-            assert resp.status == 200, resp
-            return await resp.json()
+        url = '/apps/{}/{}'.format(app_name, instance_id)
+        return await self._do_req(url)
 
     async def get_instance(self, instance_id: Optional[str] = None):
         """Get a specific instance, without needing to care about
         the app name."""
         instance_id = instance_id or self._instance_id
-        url = '{}/instances/{}'.format(self._eureka_url, instance_id)
-        async with _SESSION.get(url) as resp:
-            assert resp.status == 200, resp
-            return await resp.json()
+        url = '/instances/{}'.format(instance_id)
+        return await self._do_req(url)
 
     async def get_by_vip(self, vip_address: Optional[str] = None):
         """Query for all instances under a particular vip address"""
         vip_address = vip_address or self._app_name
-        url = '{}/vips/{}'.format(self._eureka_url, vip_address)
-        async with _SESSION.get(url) as resp:
-            assert resp.status == 200, resp
-            return await resp.json()
+        url = '/vips/{}'.format(vip_address)
+        return await self._do_req(url)
 
     async def get_by_svip(self, svip_address: Optional[str] = None):
         """Query for all instances under a particular secure vip address"""
         svip_address = svip_address or self._app_name
-        url = '{}/vips/{}'.format(self._eureka_url, svip_address)
-        async with _SESSION.get(url) as resp:
-            assert resp.status == 200, resp
+        url = '/vips/{}'.format(svip_address)
+        return await self._do_req(url)
+
+    async def _do_req(self, path: str, *, method: str = 'GET',
+                      data: Optional[Any] = None):
+        """
+        Performs a request against the instance eureka server.
+        :param path: URL Path, the hostname is prepended automatically
+        :param method: request method (put/post/patch/get/etc)
+        :param data: Optional data to be sent with the request, must
+                     already be encoded appropriately.
+        :return: optional[dict[str, any]]
+        """
+        url = self._eureka_url + path
+        self._log.debug('Performing %s on %s', method, url)
+        async with _SESSION.request(method, url, data=data) as resp:
+            if 400 <= resp.status < 600:
+                # noinspection PyArgumentList
+                raise EurekaException(HTTPStatus(resp.status))
+            self._log.debug('Result: %s', resp.status)
             return await resp.json()
 
     def _generate_instance_id(self):
@@ -252,5 +252,16 @@ class EurekaClient:
         instance_id = '{}:{}:{}'.format(
             str(uuid.uuid4()), self._app_name, self._port
         )
-        _LOG.info('Generated new instance id: %s', instance_id)
+        logger.debug('Generated new instance id: %s for app: %s', instance_id,
+                    self._app_name)
         return instance_id
+
+    @property
+    def instance_id(self):
+        """The instance_id the eureka client is targeting"""
+        return self._instance_id
+
+    @property
+    def app_name(self):
+        """The app_name the eureka client is targeting"""
+        return self._app_name

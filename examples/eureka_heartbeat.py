@@ -12,6 +12,7 @@ import socket
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from wasp_eureka import EurekaClient
+from wasp_eureka.exc import EurekaException
 
 
 async def renew_lease(eureka):
@@ -19,11 +20,11 @@ async def renew_lease(eureka):
     # checkins for good.
     print('Renewing eureka lease')
     try:
-        res = await eureka.renew()
-        print('Renewed:', res)
-        return res
-    except Exception:
-        print('Error renewing registration')
+        await eureka.renew()
+        print('Renewed')
+        return True
+    except EurekaException as e:
+        print('Error renewing registration:', e.status)
         return False
 
 
@@ -39,8 +40,7 @@ if __name__ == '__main__':
                           loop=loop)
 
     print('Registering...')
-    res = loop.run_until_complete(eureka.register())
-    assert res, 'Unable to register'
+    loop.run_until_complete(eureka.register())
     print('Done')
 
     scheduler.add_job(renew_lease, 'interval', seconds=30, args=(eureka,))
@@ -51,6 +51,9 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         pass
     finally:
+        # Note: If you run this with gunicorn this will deregister your app
+        # You probable just want to let that lease expire (since your app
+        # probably has >1 worker)
         print('Deregistering...')
         res = loop.run_until_complete(eureka.deregister())
         print('Done')
