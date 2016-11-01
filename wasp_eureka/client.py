@@ -253,7 +253,7 @@ class EurekaClient:
             str(uuid.uuid4()), self._app_name, self._port
         )
         logger.debug('Generated new instance id: %s for app: %s', instance_id,
-                    self._app_name)
+                     self._app_name)
         return instance_id
 
     @property
