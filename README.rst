@@ -1,8 +1,17 @@
-.. image:: https://travis-ci.org/wickedasp/eureka.svg?branch=master
+.. image:: https://img.shields.io/travis/wickedasp/eureka/master.svg?style=flat-square
     :target: https://travis-ci.org/wickedasp/eureka
 
-.. image:: https://badge.fury.io/py/wasp-eureka.svg
-    :target: https://badge.fury.io/py/wasp-eureka
+.. image:: https://img.shields.io/pypi/l/wasp-eureka.svg?style=flat-square
+    :target: https://github.com/wickedasp/eureka/blob/master/LICENSE
+
+.. image:: https://img.shields.io/pypi/v/wasp-eureka.svg?style=flat-square
+    :target: https://pypi.python.org/pypi/wasp-eureka
+
+.. image:: https://img.shields.io/pypi/status/wasp-eureka.svg?style=flat-square
+    :target: https://pypi.python.org/pypi/wasp-eureka
+
+.. image:: https://img.shields.io/pypi/pyversions/wasp-eureka.svg?style=flat-square
+    :target: https://pypi.python.org/pypi/wasp-eureka
 
 WASP Eureka
 ===========
