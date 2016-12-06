@@ -34,7 +34,11 @@ setup(name='wasp-eureka',
       install_requires=[
           'aiohttp',
       ],
-      extras_require={},
+      extras_require={
+          'standalone': [
+              'apscheduler>=3.3.0',
+          ]
+      },
       tests_require=[
           'pytest-aiohttp',
           'pytest'

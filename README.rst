@@ -27,11 +27,16 @@ Note: this supports Python 3.5+
 
     $ pip install wasp-eureka
 
+If you want to just run it standalone, include those dependencies:
+
+.. code-block:: bash
+
+    $ pip install wasp-eureka[standalone]
 
 Usage
 -----
 
-The surface area of this module is pretty small, effectively you just need to care about the wasp_gateway.EurekaClient class and its methods:
+The surface area of this module is pretty small, effectively you just need to care about the ``wasp_gateway.EurekaClient`` class and its methods:
 
 .. code-block:: python
 
@@ -66,10 +71,6 @@ The surface area of this module is pretty small, effectively you just need to ca
     
     loop.run_until_complete(main(loop=loop))
 
-Depending on your framework, you probably want to use a scheduler (see APScheduler_ for support for a wide number of python frameworks)
-
-.. _APScheduler: https://apscheduler.readthedocs.io/en/latest/
-
 Creating a Release
 ------------------
 
@@ -83,4 +84,5 @@ Bumpversion_ provides a simplified way to manage versioning, to check the dry ru
 
     $ bumpversion patch
 
+.. _APScheduler: https://apscheduler.readthedocs.io/en/latest/
 .. _Bumpversion: https://pypi.python.org/pypi/bumpversion

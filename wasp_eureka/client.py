@@ -49,7 +49,7 @@ class EurekaClient:
 
     def __init__(self, app_name: str, port: int, ip_addr: str, *,
                  hostname: Optional[str] = None,
-                 eureka_url: str = 'http://localhost:8765/eureka/',
+                 eureka_url: str = 'http://localhost:8765',
                  loop: Optional[asyncio.AbstractEventLoop] = None,
                  instance_id: Optional[str] = None,
                  health_check_url: Optional[str] = None,
@@ -76,10 +76,10 @@ class EurekaClient:
                                 but otherwise not required. If not included -
                                 we will just use the server IP with '/info'.
         """
-        self._loop = loop or asyncio.get_event_loop()
-        if eureka_url.endswith('/'):
-            eureka_url = eureka_url[:-1]
-        self._eureka_url = eureka_url
+        self._loop = loop
+        if loop is None:
+            self._loop = asyncio.get_event_loop()
+        self._eureka_url = eureka_url.rstrip('/') + '/eureka'
         self._app_name = app_name
         self._port = port
         self._hostname = hostname or ip_addr
@@ -98,14 +98,14 @@ class EurekaClient:
         # Not including this crashes the Eureka UI, fixed in later version,
         # not one we can ensure people are using.
         if status_page_url is None:
-            status_page_url = 'http://{}:{}/info'.format(ip_addr, port)
+            status_page_url = 'http://{}:{}/info'.format(self._ip_addr, port)
             self._log.debug('Status page not provided, rewriting to %s',
                             status_page_url)
         self._status_page_url = status_page_url
 
     async def register(self, *, metadata: Optional[Dict[str, Any]] = None,
-                       lease_duration: int = 30,
-                       lease_renewal_interval: int = 10):
+                       lease_duration: int = 60,
+                       lease_renewal_interval: int = 15):
         """Register the current application with eureka with the
         specified status. Note, there is a limited lease with eureka,
         so you will want to renew it on a schedule. Also to avoid
@@ -156,20 +156,20 @@ class EurekaClient:
         self._log.debug('Registering %s', self._app_name)
         return await self._do_req(url, method='POST', data=json.dumps(payload))
 
-    async def renew(self) -> bool:
+    async def renew(self):
         """Renews the application's lease with eureka to avoid
         eradicating stale/decommissioned applications."""
         url = '/apps/{}/{}'.format(self._app_name, self._instance_id)
         return await self._do_req(url, method='PUT')
 
-    async def deregister(self) -> bool:
+    async def deregister(self):
         """Deregister with the remote server, if you forget to do
         this the gateway will be giving out 500s when it tries to
         route to your application."""
         url = '/apps/{}/{}'.format(self._app_name, self._instance_id)
         return await self._do_req(url, method='DELETE')
 
-    async def set_status_override(self, status: StatusType) -> bool:
+    async def set_status_override(self, status: StatusType):
         """Sets the status override, note: this should generally only
         be used to pull services out of commission - not really used
         to manually be setting the status to UP falsely."""
@@ -178,13 +178,13 @@ class EurekaClient:
                                                    status.value)
         return await self._do_req(url, method='PUT')
 
-    async def remove_status_override(self) -> bool:
+    async def remove_status_override(self):
         """Removes the status override."""
         url = '/apps/{}/{}/status'.format(self._app_name,
                                           self._instance_id)
         return await self._do_req(url, method='DELETE')
 
-    async def update_meta(self, key: str, value: Any) -> bool:
+    async def update_meta(self, key: str, value: Any):
         url = '/apps/{}/{}/metadata?{}={}'.format(self._app_name,
                                                   self._instance_id,
                                                   key, value)
@@ -239,15 +239,17 @@ class EurekaClient:
         :return: optional[dict[str, any]]
         """
         url = self._eureka_url + path
-        self._log.debug('Performing %s on %s', method, url)
+        self._log.debug('Performing %s on %s with payload: %s', method, path,
+                        data)
         async with _SESSION.request(method, url, data=data) as resp:
             if 400 <= resp.status < 600:
                 # noinspection PyArgumentList
-                raise EurekaException(HTTPStatus(resp.status))
+                raise EurekaException(HTTPStatus(resp.status),
+                                      await resp.text())
             self._log.debug('Result: %s', resp.status)
             return await resp.json()
 
-    def _generate_instance_id(self):
+    def _generate_instance_id(self) -> str:
         """Generates a unique instance id"""
         instance_id = '{}:{}:{}'.format(
             str(uuid.uuid4()), self._app_name, self._port
@@ -257,11 +259,11 @@ class EurekaClient:
         return instance_id
 
     @property
-    def instance_id(self):
+    def instance_id(self) -> str:
         """The instance_id the eureka client is targeting"""
         return self._instance_id
 
     @property
-    def app_name(self):
+    def app_name(self) -> str:
         """The app_name the eureka client is targeting"""
         return self._app_name

@@ -11,49 +11,40 @@ import contextlib
 import logging
 import socket
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from http import HTTPStatus
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 from wasp_eureka import EurekaClient
+from wasp_eureka.exc import EurekaException
 
-logging.basicConfig(level=logging.INFO)
+with contextlib.suppress(ImportError):
+    import uvloop
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
+logging.basicConfig(level=logging.ERROR,
+                    format='%(asctime)-20s %(levelname)5s :: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
 logger = logging.getLogger('wasp.eureka')
+logger.setLevel(logging.INFO)
 
 
-async def run_scheduler(eureka, *, interval=30, loop=None):
-    """Schedules the renewal to be performed, tasks
-    are scheduled in the event loop on the interval,
-    ignoring previous task run-times."""
-    if loop is None:
-        loop = asyncio.get_event_loop()
-
-    def log_on_err(future) -> None:
-        if future.exception():
-            logger.error('Error during task: %s', future.exception())
-        else:
-            logger.debug('Task complete.')
-
-    logger.info('Scheduling task every %s seconds.', interval)
-    while True:
-        await asyncio.sleep(interval, loop=loop)
-        logger.debug('Firing task.')
-        task = loop.create_task(eureka.renew())
-        task.add_done_callback(log_on_err)
-
-
-def main():
+def parse_args():
     parser = ArgumentParser(prog='wasp_eureka',
                             description=__doc__,
-                            formatter_class=ArgumentDefaultsHelpFormatter)  # noqa
-
+                            formatter_class=ArgumentDefaultsHelpFormatter)
+    # Required
     parser.add_argument('--name', type=str, required=True,
                         help='Application name')
     parser.add_argument('--port', type=int, required=True,
                         help='Exposed server listening port')
+    # Optional
     parser.add_argument('--ip', type=str,
                         default=socket.gethostbyname(socket.gethostname()),
                         help='Remotely accessible IP address')
     parser.add_argument('--eureka', type=str,
-                        default='http://localhost:8761/eureka/',
+                        default='http://localhost:8761',
                         help='Target eureka server')
     parser.add_argument('--debug', action='store_true',
                         help='Enable debug logging')
@@ -65,15 +56,22 @@ def main():
                         help='Health path')
     parser.add_argument('--status-path', type=str, default='/info',
                         help='Status/Info page path')
-    args = parser.parse_args()
+    parser.add_argument('--secure', action='store_true',
+                        help='Flag to indicate the service is listening on SSL')  # noqa
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
 
     if args.debug:
         logger.setLevel(logging.DEBUG)
 
-    status_url = 'http://{}:{}{}'.format(args.instance_id, args.port,
-                                         args.status_path)
-    health_url = 'http://{}:{}{}'.format(args.instance_id, args.port,
-                                         args.health_path)
+    scheme = 'https' if args.secure else 'http'
+    status_url = '{}://{}:{}{}'.format(scheme, args.ip, args.port,
+                                       args.status_path)
+    health_url = '{}://{}:{}{}'.format(scheme, args.ip, args.port,
+                                       args.health_path)
     eureka = EurekaClient(args.name, args.port, args.ip,
                           eureka_url=args.eureka,
                           instance_id=args.instance_id,
@@ -82,16 +80,30 @@ def main():
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(eureka.register())
-    scheduler_task = loop.create_task(run_scheduler(eureka,
-                                                    interval=args.interval))
+    logger.info('Registered with eureka as %s', eureka.instance_id)
+
+    scheduler = AsyncIOScheduler({'event_loop': loop})
+
+    @scheduler.scheduled_job(IntervalTrigger(seconds=args.interval))
+    async def renew_lease():
+        try:
+            logger.debug('Attempting to renew the lease...')
+            await eureka.renew()
+            logger.info('Lease renewed')
+        except EurekaException as e:
+            if e.status == HTTPStatus.NOT_FOUND:
+                logger.info('Lease expired, re-registering.')
+                await eureka.register()
+                return
+            logger.error('Error performing renewal: %s', e)
+
+    scheduler.start()
     try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
+        logger.info('Running')
+        with contextlib.suppress(KeyboardInterrupt):
+            loop.run_forever()
     finally:
-        with contextlib.suppress(asyncio.CancelledError):
-            scheduler_task.cancel()
-        asyncio.gather(scheduler_task, loop=loop)
+        scheduler.shutdown()
         loop.run_until_complete(eureka.deregister())
         loop.close()
 
