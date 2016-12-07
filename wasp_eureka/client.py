@@ -20,7 +20,7 @@ except ImportError:
 
 from aiohttp import ClientSession
 
-from .log import logger, InstanceIdLogAdapter
+from .log import logger
 
 _SESSION = ClientSession(headers={
     # They default to using XML.
@@ -45,9 +45,13 @@ class StatusType(enum.Enum):
 class EurekaClient:
     __slots__ = ('_loop', '_eureka_url', '_app_name', '_port', '_hostname',
                  '_ip_addr', '_instance_id', '_health_check_url',
-                 '_status_page_url', '_log')
+                 '_status_page_url')
 
-    def __init__(self, app_name: str, port: int, ip_addr: str, *,
+    def __init__(self,
+                 app_name: Optional[str] = None,
+                 port: Optional[int] = None,
+                 ip_addr: Optional[str] = None,
+                 *,
                  hostname: Optional[str] = None,
                  eureka_url: str = 'http://localhost:8765',
                  loop: Optional[asyncio.AbstractEventLoop] = None,
@@ -58,12 +62,16 @@ class EurekaClient:
         Naive eureka client, only supports the base operations.
 
         :param app_name: Application name, this is used to register/find
-                         by name.
-        :param port: Application port that is accessible
-        :param ip_addr: IP Address the server is available on
+                         by name. Only required if you want to register
+                         with Eureka.
+        :param port: Application port that is accessible. Only required if
+                     you want to register with Eureka
+        :param ip_addr: IP Address the server is available on. Only required
+                        if you want to register with Eureka.
         :param hostname: Host name of the machine, if not reachable by
                          DNS, use the IP. If not provided, the IP is
-                         used by default.
+                         used by default. Only required if you want to register
+                         with Eureka
         :param eureka_url: Eureka server url, including path.
         :param loop: Event loop to operate on
         :param instance_id: Server instance ID, you should only really
@@ -86,20 +94,13 @@ class EurekaClient:
         self._ip_addr = ip_addr
         self._health_check_url = health_check_url
 
-        # unique id for the application, only really required
-        # if this instance wants to register with Eureka instead
-        # of just being a consumer.
-        self._instance_id = instance_id or self._generate_instance_id()
-
-        self._log = InstanceIdLogAdapter(logger, {
-            'instance_id': self._instance_id
-        })
+        self._instance_id = instance_id
 
         # Not including this crashes the Eureka UI, fixed in later version,
         # not one we can ensure people are using.
         if status_page_url is None:
             status_page_url = 'http://{}:{}/info'.format(self._ip_addr, port)
-            self._log.debug('Status page not provided, rewriting to %s',
+            logger.debug('Status page not provided, rewriting to %s',
                             status_page_url)
         self._status_page_url = status_page_url
 
@@ -119,7 +120,7 @@ class EurekaClient:
         """
         payload = {
             'instance': {
-                'instanceId': self._instance_id,
+                'instanceId': self.instance_id,
                 'leaseInfo': {
                     # 'evictionDurationSecs': eviction_duration,  # v2?
                     'durationInSecs': lease_duration,
@@ -153,20 +154,20 @@ class EurekaClient:
         if metadata:
             payload['instance']['metadata'] = metadata
         url = '/apps/{}'.format(self._app_name)
-        self._log.debug('Registering %s', self._app_name)
+        logger.debug('Registering %s', self._app_name)
         return await self._do_req(url, method='POST', data=json.dumps(payload))
 
     async def renew(self):
         """Renews the application's lease with eureka to avoid
         eradicating stale/decommissioned applications."""
-        url = '/apps/{}/{}'.format(self._app_name, self._instance_id)
+        url = '/apps/{}/{}'.format(self._app_name, self.instance_id)
         return await self._do_req(url, method='PUT')
 
     async def deregister(self):
         """Deregister with the remote server, if you forget to do
         this the gateway will be giving out 500s when it tries to
         route to your application."""
-        url = '/apps/{}/{}'.format(self._app_name, self._instance_id)
+        url = '/apps/{}/{}'.format(self._app_name, self.instance_id)
         return await self._do_req(url, method='DELETE')
 
     async def set_status_override(self, status: StatusType):
@@ -174,19 +175,19 @@ class EurekaClient:
         be used to pull services out of commission - not really used
         to manually be setting the status to UP falsely."""
         url = '/apps/{}/{}/status?value={}'.format(self._app_name,
-                                                   self._instance_id,
+                                                   self.instance_id,
                                                    status.value)
         return await self._do_req(url, method='PUT')
 
     async def remove_status_override(self):
         """Removes the status override."""
         url = '/apps/{}/{}/status'.format(self._app_name,
-                                          self._instance_id)
+                                          self.instance_id)
         return await self._do_req(url, method='DELETE')
 
     async def update_meta(self, key: str, value: Any):
         url = '/apps/{}/{}/metadata?{}={}'.format(self._app_name,
-                                                  self._instance_id,
+                                                  self.instance_id,
                                                   key, value)
         return await self._do_req(url, method='PUT')
 
@@ -205,14 +206,14 @@ class EurekaClient:
                                instance_id: Optional[str] = None):
         """Get a specific instance, narrowed by app name."""
         app_name = app_name or self._app_name
-        instance_id = instance_id or self._instance_id
+        instance_id = instance_id or self.instance_id
         url = '/apps/{}/{}'.format(app_name, instance_id)
         return await self._do_req(url)
 
     async def get_instance(self, instance_id: Optional[str] = None):
         """Get a specific instance, without needing to care about
         the app name."""
-        instance_id = instance_id or self._instance_id
+        instance_id = instance_id or self.instance_id
         url = '/instances/{}'.format(instance_id)
         return await self._do_req(url)
 
@@ -239,14 +240,14 @@ class EurekaClient:
         :return: optional[dict[str, any]]
         """
         url = self._eureka_url + path
-        self._log.debug('Performing %s on %s with payload: %s', method, path,
+        logger.debug('Performing %s on %s with payload: %s', method, path,
                         data)
         async with _SESSION.request(method, url, data=data) as resp:
             if 400 <= resp.status < 600:
                 # noinspection PyArgumentList
                 raise EurekaException(HTTPStatus(resp.status),
                                       await resp.text())
-            self._log.debug('Result: %s', resp.status)
+            logger.debug('Result: %s', resp.status)
             return await resp.json()
 
     def _generate_instance_id(self) -> str:
@@ -261,6 +262,9 @@ class EurekaClient:
     @property
     def instance_id(self) -> str:
         """The instance_id the eureka client is targeting"""
+        if self._instance_id is None:
+            self._instance_id = self._generate_instance_id()
+        # noinspection PyTypeChecker
         return self._instance_id
 
     @property
