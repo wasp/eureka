@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 # Version managed by bumpversion, do not change it directly.
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 
 setup(name='wasp-eureka',
