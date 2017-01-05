@@ -101,7 +101,7 @@ class EurekaClient:
         if status_page_url is None:
             status_page_url = 'http://{}:{}/info'.format(self._ip_addr, port)
             logger.debug('Status page not provided, rewriting to %s',
-                            status_page_url)
+                         status_page_url)
         self._status_page_url = status_page_url
 
     async def register(self, *, metadata: Optional[Dict[str, Any]] = None,
@@ -241,7 +241,7 @@ class EurekaClient:
         """
         url = self._eureka_url + path
         logger.debug('Performing %s on %s with payload: %s', method, path,
-                        data)
+                     data)
         async with _SESSION.request(method, url, data=data) as resp:
             if 400 <= resp.status < 600:
                 # noinspection PyArgumentList

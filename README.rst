@@ -36,13 +36,13 @@ If you want to just run it standalone, include those dependencies:
 Usage
 -----
 
-The surface area of this module is pretty small, effectively you just need to care about the ``wasp_gateway.EurekaClient`` class and its methods:
+The surface area of this module is pretty small, effectively you just need to care about the ``wasp_eureka.EurekaClient`` class and its methods:
 
 .. code-block:: python
 
     import asyncio
     
-    from wasp_gateway import EurekaClient
+    from wasp_eureka import EurekaClient
     
     # no spaces or underscores, this needs to be url-friendly
     app_name = 'test-app'
