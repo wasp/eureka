@@ -69,7 +69,7 @@ The surface area of this module is pretty small, effectively you just need to ca
             await asyncio.sleep(67)
             await eureka.renew()
     
-    loop.run_until_complete(main(loop=loop))
+    loop.run_until_complete(main())
 
 Creating a Release
 ------------------
